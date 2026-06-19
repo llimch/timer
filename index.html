@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Timer</title>
+  <style>
+    :root {
+      --bg: #0a0a0a;
+      --card: #111;
+      --text: #fff;
+      --muted: #666;
+      --accent: #00d4ff;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; padding: 0; height: 100%;
+      background: var(--bg); color: var(--text);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      display: flex; align-items: center; justify-content: center;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .wrap {
+      width: 100%; max-width: 420px; padding: 20px;
+      display: flex; flex-direction: column; align-items: center; gap: 24px;
+    }
+    h1 {
+      margin: 0; font-size: 18px; font-weight: 600; letter-spacing: 1px;
+      color: var(--muted); text-transform: uppercase;
+    }
+    .timer {
+      position: relative; width: 280px; height: 280px;
+    }
+    svg {
+      width: 100%; height: 100%; transform: rotate(-90deg);
+    }
+    .track {
+      fill: none; stroke: #222; stroke-width: 18;
+    }
+    .progress {
+      fill: none; stroke: #00d4ff; stroke-width: 18; stroke-linecap: round;
+      transition: stroke 120ms linear;
+    }
+    .time {
+      position: absolute; top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 72px; font-weight: 700; font-variant-numeric: tabular-nums;
+      line-height: 1; letter-spacing: -2px;
+    }
+    .duration {
+      display: flex; align-items: center; gap: 12px;
+      font-size: 28px; font-weight: 600;
+    }
+    .duration button {
+      width: 48px; height: 48px; border: none; border-radius: 999px;
+      background: #222; color: #fff; font-size: 28px; line-height: 1;
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+      user-select: none;
+    }
+    .duration button:active { background: #333; }
+    .duration button:disabled { opacity: 0.4; cursor: not-allowed; }
+    .duration .value {
+      min-width: 80px; text-align: center; font-variant-numeric: tabular-nums;
+    }
+    .controls {
+      display: flex; gap: 12px; width: 100%; max-width: 280px;
+    }
+    .controls button {
+      flex: 1; padding: 14px 20px; font-size: 18px; font-weight: 600;
+      border: none; border-radius: 12px; cursor: pointer;
+      transition: transform 80ms ease, background 80ms ease;
+    }
+    .controls button:active { transform: scale(0.97); }
+    #start {
+      background: #fff; color: #000;
+    }
+    #start.paused { background: #00d4ff; color: #000; }
+    #reset {
+      background: #222; color: #fff;
+    }
+    .bottom {
+      display: flex; align-items: center; justify-content: space-between;
+      width: 100%; max-width: 280px; font-size: 14px;
+    }
+    .sound {
+      display: flex; align-items: center; gap: 8px; color: var(--muted);
+      cursor: pointer; user-select: none;
+    }
+    .sound input { width: 18px; height: 18px; accent-color: #00d4ff; }
+    .fs {
+      background: none; border: 1px solid #333; color: var(--muted);
+      padding: 6px 12px; border-radius: 6px; font-size: 13px; cursor: pointer;
+    }
+    .fs:hover { color: #fff; border-color: #555; }
+    .hint {
+      font-size: 12px; color: #444; margin-top: -8px;
+    }
+    .prelabel {
+      position: absolute;
+      left: 50%;
+      bottom: -32px;
+      transform: translateX(-50%);
+      font-size: 15px;
+      letter-spacing: 2.5px;
+      color: #aaa;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    @media (max-width: 380px) {
+      .timer { width: 240px; height: 240px; }
+      .time { font-size: 62px; }
+      .prelabel { bottom: -28px; font-size: 14px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Timer</h1>
+
+    <div class="timer" id="ring-container">
+      <svg viewBox="0 0 300 300" width="280" height="280">
+        <defs>
+          <linearGradient id="spectrum" gradientTransform="rotate(90)">
+            <stop offset="0%" stop-color="#00d4ff"/>
+            <stop offset="50%" stop-color="#7c3aed"/>
+            <stop offset="100%" stop-color="#f472b6"/>
+          </linearGradient>
+        </defs>
+        <circle class="track" cx="150" cy="150" r="120"></circle>
+        <circle id="progress" class="progress" cx="150" cy="150" r="120"
+                stroke="url(#spectrum)" stroke-dasharray="754" stroke-dashoffset="0"></circle>
+      </svg>
+      <div class="time" id="time">1:00</div>
+      <div class="prelabel" id="prelabel"></div>
+    </div>
+
+    <div class="duration">
+      <button id="minus" aria-label="Decrease time">−</button>
+      <div class="value" id="duration">60</div>
+      <button id="plus" aria-label="Increase time">+</button>
+    </div>
+    <div class="hint">10 - 120 seconds</div>
+
+    <div class="controls">
+      <button id="start">Start</button>
+      <button id="reset">Reset</button>
+    </div>
+
+    <div class="bottom">
+      <label class="sound">
+        <input type="checkbox" id="sound-toggle" checked>
+        <span>Sound</span>
+      </label>
+      <button class="fs" id="fullscreen">Fullscreen</button>
+    </div>
+  </div>
+
+  <script>
+    // Config
+    const MIN_SEC = 10;
+    const MAX_SEC = 120;
+    const DEFAULT_SEC = 60;
+    const CIRCUMFERENCE = 2 * Math.PI * 120; // r=120
+
+    // State
+    let duration = DEFAULT_SEC;
+    let endTime = null;
+    let rafId = null;
+    let audioCtx = null;
+    let soundEnabled = true;
+
+    // Pre-start + speech
+    let isPrestarting = false;
+    let prestartCount = 5;
+    let prestartInterval = null;
+    let lastSpoken = null;
+    let pausedRemaining = null;
+
+    // Ring color buckets per reference chart (first column letters)
+    // 0-10s = J (#EA0034 red, blinks)
+    // 11-20s = K (#FD4703)
+    // 21-30s = L (#FF822A)
+    // 31-40s = N (#B610BF)
+    // 41-50s = F (#9AF000)
+    // 51-60s = C (#07B9FC)
+    // >60s  = E (#00AB38)
+    function getColorForRemaining(rem) {
+      if (rem <= 10) return '#EA0034'; // J
+      if (rem <= 20) return '#FD4703'; // K
+      if (rem <= 30) return '#FF822A'; // L
+      if (rem <= 40) return '#B610BF'; // N
+      if (rem <= 50) return '#9AF000'; // F
+      if (rem <= 60) return '#07B9FC'; // C
+      return '#00AB38'; // E
+    }
+
+    // Elements
+    const timeEl = document.getElementById('time');
+    const progressEl = document.getElementById('progress');
+    const durationEl = document.getElementById('duration');
+    const startBtn = document.getElementById('start');
+    const resetBtn = document.getElementById('reset');
+    const minusBtn = document.getElementById('minus');
+    const plusBtn = document.getElementById('plus');
+    const soundToggle = document.getElementById('sound-toggle');
+    const fsBtn = document.getElementById('fullscreen');
+    const prelabelEl = document.getElementById('prelabel');
+
+    // Init progress circle
+    progressEl.setAttribute('stroke-dasharray', CIRCUMFERENCE);
+    progressEl.setAttribute('stroke-dashoffset', CIRCUMFERENCE);
+
+    function ensureAudio() {
+      if (!audioCtx) {
+        try {
+          audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        } catch (e) {}
+      }
+      if (audioCtx && audioCtx.state === 'suspended') {
+        audioCtx.resume().catch(() => {});
+      }
+    }
+
+    function playTick() {
+      if (!soundEnabled || !audioCtx) return;
+      try {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        const filter = audioCtx.createBiquadFilter();
+
+        osc.type = 'square';
+        osc.frequency.value = 920;
+        filter.type = 'highpass';
+        filter.frequency.value = 700;
+
+        gain.gain.value = 0.18;
+
+        const t = audioCtx.currentTime;
+        gain.gain.setValueAtTime(0.18, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
+
+        const out = audioCtx.destination;
+        osc.connect(filter);
+        filter.connect(gain);
+        gain.connect(out);
+
+        osc.start(t);
+        osc.stop(t + 0.07);
+      } catch (e) {}
+    }
+
+    function playDing() {
+      if (!soundEnabled || !audioCtx) return;
+      try {
+        const t = audioCtx.currentTime;
+
+        // Main tone
+        const osc1 = audioCtx.createOscillator();
+        const gain1 = audioCtx.createGain();
+        osc1.type = 'sine';
+        osc1.frequency.value = 660;
+
+        const osc2 = audioCtx.createOscillator();
+        const gain2 = audioCtx.createGain();
+        osc2.type = 'sine';
+        osc2.frequency.value = 880;
+
+        gain1.gain.value = 0.0;
+        gain2.gain.value = 0.0;
+
+        const master = audioCtx.createGain();
+        master.gain.value = 0.7;
+
+        osc1.connect(gain1);
+        osc2.connect(gain2);
+        gain1.connect(master);
+        gain2.connect(master);
+        master.connect(audioCtx.destination);
+
+        // Envelope
+        const attack = 0.01;
+        gain1.gain.setValueAtTime(0.0001, t);
+        gain1.gain.linearRampToValueAtTime(0.55, t + attack);
+        gain1.gain.exponentialRampToValueAtTime(0.0001, t + 1.15);
+
+        gain2.gain.setValueAtTime(0.0001, t);
+        gain2.gain.linearRampToValueAtTime(0.35, t + attack);
+        gain2.gain.exponentialRampToValueAtTime(0.0001, t + 1.4);
+
+        osc1.start(t);
+        osc2.start(t);
+        osc1.stop(t + 1.6);
+        osc2.stop(t + 1.6);
+      } catch (e) {}
+    }
+
+    function playShortTone(freq, durationMs, volume) {
+      if (!soundEnabled || !audioCtx) return;
+      try {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        const t = audioCtx.currentTime;
+        osc.type = 'sine';
+        osc.frequency.value = freq;
+        gain.gain.value = volume || 0.5;
+
+        const end = t + (durationMs / 1000);
+        gain.gain.setValueAtTime(gain.gain.value, t);
+        gain.gain.linearRampToValueAtTime(0.001, end);
+
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start(t);
+        osc.stop(end + 0.02);
+      } catch (e) {}
+    }
+
+    function playTingTingTing() {
+      if (!soundEnabled || !audioCtx) return;
+      // Stock-market style success chimes (3 bright tings)
+      const delays = [0, 170, 340];
+      const freqs = [1050, 1320, 1580];
+      delays.forEach((d, i) => {
+        setTimeout(() => playShortTone(freqs[i], 160, 0.65), d);
+      });
+    }
+
+    // --- Speech synthesis (female voice preference) ---
+    let speechVoices = [];
+
+    function loadVoices() {
+      speechVoices = window.speechSynthesis ? window.speechSynthesis.getVoices() : [];
+    }
+    if (window.speechSynthesis) {
+      window.speechSynthesis.onvoiceschanged = loadVoices;
+      loadVoices();
+    }
+
+    function speak(text) {
+      if (!soundEnabled || !window.speechSynthesis) return;
+      try {
+        const utter = new SpeechSynthesisUtterance(text);
+        // Prefer female / English voices
+        const pick = speechVoices.find(v =>
+          /female|woman|samantha|karen|emma|olivia|ava|isabella|susan|alice|victoria/i.test(v.name + ' ' + v.voiceURI)
+        ) || speechVoices.find(v => /^en/i.test(v.lang));
+        if (pick) utter.voice = pick;
+        utter.pitch = 1.18;
+        utter.rate = 0.92;
+        utter.volume = 0.95;
+        window.speechSynthesis.speak(utter);
+      } catch (e) {}
+    }
+
+    function numberToWords(n) {
+      if (n === 120) return 'One Twenty';
+      if (n === 110) return 'One Ten';
+      const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten',
+        'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
+      const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+      if (n < 20) return ones[n];
+      if (n < 100) {
+        const t = Math.floor(n / 10);
+        const o = n % 10;
+        return tens[t] + (o ? ' ' + ones[o] : '');
+      }
+      if (n === 100) return 'One Hundred';
+      return n.toString();
+    }
+
+    function maybeSpeak(remaining) {
+      if (remaining <= 0) return;
+      // Last 10 seconds: speak every second
+      if (remaining <= 10) {
+        if (lastSpoken !== remaining) {
+          lastSpoken = remaining;
+          speak(numberToWords(remaining));
+        }
+      } else if (remaining % 10 === 0) {
+        // Every 10s for higher numbers
+        if (lastSpoken !== remaining) {
+          lastSpoken = remaining;
+          speak(numberToWords(remaining));
+        }
+      }
+    }
+
+    function formatTime(sec) {
+      const m = Math.floor(sec / 60);
+      const s = sec % 60;
+      return `${m}:${s.toString().padStart(2, '0')}`;
+    }
+
+    function updateDurationDisplay() {
+      durationEl.textContent = duration;
+    }
+
+    function setDuration(newDur, fromUser = true) {
+      duration = Math.max(MIN_SEC, Math.min(MAX_SEC, Math.round(newDur)));
+      updateDurationDisplay();
+
+      if (!isRunning() && !isPrestarting) {
+        renderTime(duration);
+        setRingOffset(1);
+        setRingColor(getColorForRemaining(duration));
+        timeEl.style.color = '';  // preview: ring shows bucket color, digits stay white
+      }
+    }
+
+    function isRunning() {
+      return endTime !== null;
+    }
+
+    function setRingOffset(ratio) {
+      // ratio 1 = full, 0 = empty
+      const offset = CIRCUMFERENCE * (1 - Math.max(0, Math.min(1, ratio)));
+      progressEl.setAttribute('stroke-dashoffset', offset.toFixed(1));
+    }
+
+    function setRingColor(colorHex) {
+      progressEl.setAttribute('stroke', colorHex);
+      progressEl.style.stroke = colorHex; // force override for reliability
+    }
+
+    function setProgress(ratio) {
+      setRingOffset(ratio);
+    }
+
+    function renderTime(sec) {
+      timeEl.textContent = formatTime(sec);
+    }
+
+    function tick() {
+      if (!endTime) return;
+
+      const remainingMs = endTime - Date.now();
+      let remaining = Math.max(0, Math.ceil(remainingMs / 1000));
+
+      renderTime(remaining);
+
+      // Ring + time digits (second wording) both change color per buckets
+      let color = getColorForRemaining(remaining);
+      if (remaining > 0 && remaining <= 10) {
+        // Blink J red: alternate with track color every ~400ms for warning effect
+        const blinkOn = Math.floor(Date.now() / 400) % 2 === 0;
+        if (!blinkOn) color = '#222';
+      }
+      setRingColor(color);
+      timeEl.style.color = color;  // second wording (digits) also changes with ring
+      const ratio = remaining / duration;
+      setRingOffset(ratio);
+
+      if (remaining <= 0) {
+        finish();
+        return;
+      }
+
+      // Voice announcements (every 10s + every sec in last 10)
+      if (remaining < duration) {
+        maybeSpeak(remaining);
+      }
+
+      // Play tick on whole second boundaries (approx)
+      const nextSecond = Math.ceil(remainingMs / 1000);
+      if (nextSecond !== window._lastSecond) {
+        window._lastSecond = nextSecond;
+        if (remaining < duration) playTick(); // avoid tick on first second
+      }
+
+      rafId = requestAnimationFrame(tick);
+    }
+
+    function clearPrestart() {
+      if (prestartInterval) {
+        clearInterval(prestartInterval);
+        prestartInterval = null;
+      }
+      isPrestarting = false;
+      prelabelEl.textContent = '';
+      pausedRemaining = null;
+    }
+
+    function updatePrestartUI() {
+      if (prestartCount > 0) {
+        timeEl.textContent = `-${prestartCount}`;
+        prelabelEl.textContent = `T MINUS ${prestartCount}`;
+      } else {
+        timeEl.textContent = '0';
+        prelabelEl.textContent = 'START NOW';
+      }
+      // Ring stays full during prestart, use bucket color for the target duration
+      setRingOffset(1);
+      setRingColor(getColorForRemaining(duration));
+      timeEl.style.color = '';  // prestart digits are special (white)
+    }
+
+    function launchMainCountdown() {
+      clearPrestart();
+      ensureAudio();
+
+      speak('Start now');
+
+      const now = Date.now();
+      endTime = now + duration * 1000;
+      window._lastSecond = duration + 1;
+      lastSpoken = null;
+
+      renderTime(duration);
+      setRingOffset(1);
+      setRingColor(getColorForRemaining(duration));
+      timeEl.style.color = '';  // will be colored by tick once running
+
+      startBtn.textContent = 'Pause';
+      startBtn.classList.add('paused');
+      minusBtn.disabled = true;
+      plusBtn.disabled = true;
+
+      // small delay so "START NOW" is visible briefly
+      setTimeout(() => {
+        if (!isPrestarting && endTime) {
+          prelabelEl.textContent = '';
+          rafId = requestAnimationFrame(tick);
+        }
+      }, 680);
+    }
+
+    function beginPrestart() {
+      clearPrestart();
+      ensureAudio();
+
+      isPrestarting = true;
+      prestartCount = 5;
+      endTime = null;
+      lastSpoken = null;
+
+      startBtn.textContent = 'Starting...';
+      startBtn.classList.remove('paused');
+      minusBtn.disabled = true;
+      plusBtn.disabled = true;
+
+      updatePrestartUI();
+      if (soundEnabled) speak('5');
+
+      prestartInterval = setInterval(() => {
+        prestartCount--;
+        updatePrestartUI();
+
+        // Speak pre-start countdown (female voice)
+        if (prestartCount > 0 && soundEnabled) {
+          speak(String(prestartCount));
+        }
+
+        // soft readiness tick (different tone)
+        if (prestartCount >= 0 && soundEnabled && audioCtx) {
+          playShortTone(780, 55, 0.12);
+        }
+
+        if (prestartCount < 0) {
+          // reached 0 - "Start Now" shown, then launch main
+          launchMainCountdown();
+        }
+      }, 1000);
+    }
+
+    function start() {
+      ensureAudio();
+
+      if (isPrestarting) {
+        // Allow clicking start during prestart to cancel it
+        clearPrestart();
+        reset();
+        return;
+      }
+
+      if (isRunning()) {
+        // Pause main countdown
+        pause();
+        return;
+      }
+
+      // Resume a paused countdown (without new prestart)
+      if (pausedRemaining !== null && pausedRemaining > 0) {
+        const remaining = pausedRemaining;
+        endTime = Date.now() + remaining * 1000;
+        window._lastSecond = remaining + 1;
+        lastSpoken = null;
+        pausedRemaining = null;
+
+        startBtn.textContent = 'Pause';
+        startBtn.classList.add('paused');
+        minusBtn.disabled = true;
+        plusBtn.disabled = true;
+
+        rafId = requestAnimationFrame(tick);
+        return;
+      }
+
+      // Fresh start (idle or after finish/Restart) → 5s readiness
+      beginPrestart();
+    }
+
+    function pause() {
+      if (rafId) cancelAnimationFrame(rafId);
+      rafId = null;
+
+      // capture remaining for resume
+      if (endTime) {
+        const remainingMs = endTime - Date.now();
+        pausedRemaining = Math.max(0, Math.ceil(remainingMs / 1000));
+      }
+
+      startBtn.textContent = 'Start';
+      startBtn.classList.remove('paused');
+
+      minusBtn.disabled = false;
+      plusBtn.disabled = false;
+
+      timeEl.style.color = '';  // reset digits to white while paused (ring keeps last color)
+    }
+
+    function finish() {
+      if (rafId) cancelAnimationFrame(rafId);
+      rafId = null;
+      endTime = null;
+      pausedRemaining = null;
+
+      renderTime(0);
+      setRingOffset(0);
+      setRingColor(getColorForRemaining(0));
+      timeEl.style.color = '';  // reset digits to default white
+
+      // New end: voice + Ting Ting Ting chimes
+      speak('Congratulations!!!');
+      playTingTingTing();
+
+      startBtn.textContent = 'Restart';
+      startBtn.classList.remove('paused');
+
+      minusBtn.disabled = false;
+      plusBtn.disabled = false;
+      prelabelEl.textContent = '';
+    }
+
+    function reset() {
+      clearPrestart();
+      if (rafId) cancelAnimationFrame(rafId);
+      rafId = null;
+      endTime = null;
+      pausedRemaining = null;
+
+      renderTime(duration);
+      setRingOffset(1);
+      setRingColor(getColorForRemaining(duration));
+      timeEl.style.color = '';  // reset digits to default white
+
+      startBtn.textContent = 'Start';
+      startBtn.classList.remove('paused');
+
+      minusBtn.disabled = false;
+      plusBtn.disabled = false;
+    }
+
+    function adjust(delta) {
+      if (isPrestarting) return;
+      pausedRemaining = null;
+      if (isRunning()) {
+        // Changing while running resets to new duration (paused)
+        pause();
+      }
+      setDuration(duration + delta);
+    }
+
+    // Event listeners
+    startBtn.addEventListener('click', start);
+    resetBtn.addEventListener('click', reset);
+
+    minusBtn.addEventListener('click', () => adjust(-5));
+    plusBtn.addEventListener('click', () => adjust(5));
+
+    soundToggle.addEventListener('change', (e) => {
+      soundEnabled = e.target.checked;
+    });
+
+    // Keyboard
+    document.addEventListener('keydown', (e) => {
+      if (e.key === ' ' || e.key === 'Spacebar') {
+        e.preventDefault();
+        start();
+      }
+      if (e.key.toLowerCase() === 'r') {
+        reset();
+      }
+      if (e.key === '+' || e.key === '=') {
+        adjust(5);
+      }
+      if (e.key === '-') {
+        adjust(-5);
+      }
+    });
+
+    // Fullscreen
+    fsBtn.addEventListener('click', () => {
+      const el = document.documentElement;
+      if (!document.fullscreenElement) {
+        if (el.requestFullscreen) el.requestFullscreen();
+        else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+      } else {
+        if (document.exitFullscreen) document.exitFullscreen();
+        else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+      }
+    });
+
+    // Duration click to allow direct input (simple prompt for speed)
+    durationEl.addEventListener('click', () => {
+      if (isRunning() || isPrestarting) return;
+      const val = prompt('Enter seconds (10-120):', duration);
+      if (val !== null) {
+        const n = parseInt(val, 10);
+        if (!isNaN(n)) setDuration(n);
+      }
+    });
+
+    // Prevent accidental space scroll etc.
+    window.addEventListener('keydown', (e) => {
+      if (e.key === ' ' && document.activeElement.tagName === 'BUTTON') {
+        e.preventDefault();
+      }
+    });
+
+    // Init
+    function init() {
+      prelabelEl.textContent = '';
+      setDuration(DEFAULT_SEC, false);
+      renderTime(DEFAULT_SEC);
+      setRingOffset(1);
+      setRingColor(getColorForRemaining(DEFAULT_SEC));
+      updateDurationDisplay();
+
+      // Make sure first interaction enables audio + speech
+      const enableOnce = () => {
+        ensureAudio();
+        if (window.speechSynthesis) {
+          try { window.speechSynthesis.resume(); } catch(e){}
+        }
+        document.removeEventListener('click', enableOnce);
+        document.removeEventListener('touchstart', enableOnce);
+      };
+      document.addEventListener('click', enableOnce, { once: true });
+      document.addEventListener('touchstart', enableOnce, { once: true });
+
+      // Default sound on
+      soundToggle.checked = true;
+      soundEnabled = true;
+    }
+
+    init();
+  </script>
+</body>
+</html>

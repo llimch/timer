@@ -1,0 +1,16 @@
+# Local history and reference files only - do not push
+VersionControl/
+*.jpg
+*.png
+*.gif
+*.pdf
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE / temp
+.vscode/
+.idea/
+*.log

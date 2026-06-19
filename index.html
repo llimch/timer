@@ -217,19 +217,35 @@
     progressEl.setAttribute('stroke-dasharray', CIRCUMFERENCE);
     progressEl.setAttribute('stroke-dashoffset', CIRCUMFERENCE);
 
-    function ensureAudio() {
+    function unlockAudio() {
       if (!audioCtx) {
         try {
           audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        } catch (e) {}
+        } catch (e) { return false; }
       }
-      if (audioCtx && audioCtx.state === 'suspended') {
+      if (audioCtx.state === 'suspended') {
         audioCtx.resume().catch(() => {});
       }
+
+      // iOS unlock hack: play silent buffer to fully activate Web Audio
+      try {
+        const buffer = audioCtx.createBuffer(1, 1, 22050);
+        const source = audioCtx.createBufferSource();
+        source.buffer = buffer;
+        source.connect(audioCtx.destination);
+        source.start(0);
+      } catch (e) {}
+
+      return true;
     }
 
+    // Keep old name as alias for backward calls
+    const ensureAudio = unlockAudio;
+
     function playTick() {
-      if (!soundEnabled || !audioCtx) return;
+      if (!soundEnabled) return;
+      unlockAudio();
+      if (!audioCtx) return;
       try {
         const osc = audioCtx.createOscillator();
         const gain = audioCtx.createGain();
@@ -240,11 +256,11 @@
         filter.type = 'highpass';
         filter.frequency.value = 700;
 
-        gain.gain.value = 0.18;
+        gain.gain.value = 0.35;
 
         const t = audioCtx.currentTime;
-        gain.gain.setValueAtTime(0.18, t);
-        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
+        gain.gain.setValueAtTime(0.35, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
 
         const out = audioCtx.destination;
         osc.connect(filter);
@@ -257,7 +273,9 @@
     }
 
     function playDing() {
-      if (!soundEnabled || !audioCtx) return;
+      if (!soundEnabled) return;
+      unlockAudio();
+      if (!audioCtx) return;
       try {
         const t = audioCtx.currentTime;
 
@@ -302,7 +320,9 @@
     }
 
     function playShortTone(freq, durationMs, volume) {
-      if (!soundEnabled || !audioCtx) return;
+      if (!soundEnabled) return;
+      unlockAudio();
+      if (!audioCtx) return;
       try {
         const osc = audioCtx.createOscillator();
         const gain = audioCtx.createGain();
@@ -323,7 +343,9 @@
     }
 
     function playTingTingTing() {
-      if (!soundEnabled || !audioCtx) return;
+      if (!soundEnabled) return;
+      unlockAudio();
+      if (!audioCtx) return;
       // Stock-market style success chimes (3 bright tings)
       const delays = [0, 170, 340];
       const freqs = [1050, 1320, 1580];
@@ -503,7 +525,7 @@
 
     function launchMainCountdown() {
       clearPrestart();
-      ensureAudio();
+      unlockAudio();
 
       speak('Start now');
 
@@ -533,7 +555,7 @@
 
     function beginPrestart() {
       clearPrestart();
-      ensureAudio();
+      unlockAudio();
 
       isPrestarting = true;
       prestartCount = 5;
@@ -558,7 +580,7 @@
         }
 
         // soft readiness tick (different tone)
-        if (prestartCount >= 0 && soundEnabled && audioCtx) {
+        if (prestartCount >= 0 && soundEnabled) {
           playShortTone(780, 55, 0.12);
         }
 
@@ -570,7 +592,7 @@
     }
 
     function start() {
-      ensureAudio();
+      unlockAudio();
 
       if (isPrestarting) {
         // Allow clicking start during prestart to cancel it
@@ -678,7 +700,10 @@
     }
 
     // Event listeners
-    startBtn.addEventListener('click', start);
+    startBtn.addEventListener('click', () => {
+      unlockAudio();
+      start();
+    });
     resetBtn.addEventListener('click', reset);
 
     minusBtn.addEventListener('click', () => adjust(-5));
@@ -743,17 +768,20 @@
       setRingColor(getColorForRemaining(DEFAULT_SEC));
       updateDurationDisplay();
 
-      // Make sure first interaction enables audio + speech
+      // Make sure first interaction enables audio + speech (strong unlock for iOS)
       const enableOnce = () => {
-        ensureAudio();
+        unlockAudio();
         if (window.speechSynthesis) {
           try { window.speechSynthesis.resume(); } catch(e){}
         }
-        document.removeEventListener('click', enableOnce);
-        document.removeEventListener('touchstart', enableOnce);
+        // Remove listeners after first interaction
+        ['click', 'touchstart', 'touchend', 'pointerdown'].forEach(evt =>
+          document.removeEventListener(evt, enableOnce)
+        );
       };
-      document.addEventListener('click', enableOnce, { once: true });
-      document.addEventListener('touchstart', enableOnce, { once: true });
+      ['click', 'touchstart', 'touchend', 'pointerdown'].forEach(evt =>
+        document.addEventListener(evt, enableOnce, { once: true })
+      );
 
       // Default sound on
       soundToggle.checked = true;

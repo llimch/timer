@@ -114,6 +114,16 @@ git push
 - Snapshot: `VersionControl/index.html.v05.20260619.2009`
 - To refresh icon on iPhone after update: delete old home screen shortcut, then re-add.
 
+## Changes in v06 (2026-06-19)
+- Fixed ticking sound not playing on iOS (PWA / Safari).
+  - Replaced weak `ensureAudio` with stronger `unlockAudio()` that uses the standard iOS silent buffer trick.
+  - Force unlock right before every Web Audio sound (tick, short tones, dings, finish chimes).
+  - Force unlock directly on Start button tap (strongest gesture context).
+  - Expanded first-interaction listeners to include touchend + pointerdown.
+  - Slightly louder and longer tick for better audibility.
+- SpeechSynthesis (voice) was already reliable — no change needed.
+- Snapshot: `VersionControl/index.html.v06.20260619.2031`
+
 ## Project
 Built as the simplest possible HTML version of a 1-minute visual timer.
 

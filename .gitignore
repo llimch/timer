@@ -1,5 +1,6 @@
 # Local history and reference files only - do not push
 VersionControl/
+git_add.bat
 *.jpg
 *.png
 !timer-icon.png

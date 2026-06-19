@@ -2,6 +2,7 @@
 VersionControl/
 *.jpg
 *.png
+!timer-icon.png
 *.gif
 *.pdf
 

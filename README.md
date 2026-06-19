@@ -46,7 +46,26 @@ Your timer will be live at:
 2. Tap Share → **Add to Home Screen**.
 3. It works like a native app.
 
-This replaces the previous Vercel instructions.
+### Changing the Home Screen Icon
+A custom icon (`timer-icon.png`) + proper PWA tags have been added.
+
+**To update the icon on your iPhone:**
+1. Delete the existing Timer icon from your home screen (long press → Remove App → Delete from Home Screen).
+2. Hard-refresh the page in Safari (or wait a few minutes after deploy).
+3. Tap Share → **Add to Home Screen** again.
+
+The new icon uses a dark background with the colorful gradient ring to match the app.
+
+Files added:
+- `timer-icon.png` (256×256)
+- `manifest.json`
+
+When deploying, commit the updated files:
+```bash
+git add index.html timer-icon.png manifest.json README.md .gitignore
+git commit -m "add custom home screen icon"
+git push
+```
 
 ## Notes
 - Sound starts after first user click (browser security).
@@ -87,6 +106,14 @@ This replaces the previous Vercel instructions.
 - Hard refresh (Ctrl+F5) recommended after edits when testing local index.html.
 - Sounds unchanged.
 
+## Changes in v05 (2026-06-19)
+- Added custom home screen icon (`timer-icon.png`) so "Add to Home Screen" on iPhone looks professional instead of a page screenshot.
+- Added PWA meta tags for iOS (`apple-mobile-web-app-capable`, status bar, theme-color).
+- Added `manifest.json` for better PWA support.
+- Icon design: dark background matching the app + the gradient ring (cyan → purple/pink) + play triangle.
+- Snapshot: `VersionControl/index.html.v05.20260619.2009`
+- To refresh icon on iPhone after update: delete old home screen shortcut, then re-add.
+
 ## Project
 Built as the simplest possible HTML version of a 1-minute visual timer.
 
@@ -116,6 +143,9 @@ Primary source file: `index.html`
 
 **v04 snapshot** (before making both ring + digits change color together):
 - `VersionControl/index.html.v04.20260619.1430`
+
+**v05 snapshot** (before adding iOS home screen icon + PWA tags):
+- `VersionControl/index.html.v05.20260619.2009`
 
 VersionControl/ is **history only** — do not execute files from it or modify them. The live file is always the root `index.html`.
 
